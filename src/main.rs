@@ -1,4 +1,27 @@
 use std::fs::File;
+use std::io::prelude::*;
+use rand;
+
+
+const FONTSET: [u8; 80] =
+[
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+];
 
 pub struct VM
 {
@@ -7,7 +30,18 @@ pub struct VM
     ir: u16,
     sp: u16,
 
+    v: [u8; 16],
+    stack: [u16; 16],
     memory: [u8; 4096],
+
+    pub gfx: [u8; 2048],
+    pub key: [u8; 16],
+
+    delay_timer: u8,
+    sound_timer: u8,
+
+    pub draw_flag: bool,
+    pub beep_flag: bool,
 }
 
 impl VM
@@ -141,17 +175,23 @@ impl VM
             // drawn, and to 0 if that dosen't happen
             0xD000 =>
             {
-                // TODO: Add in step by step comments from tutorial
+                // Fetch the position and height of the sprite based on opcode
                 let x = self.v[((self.opcode & 0x0F00) >> 8) as usize] as u16;
                 let y = self.v[((self.opcode & 0x00F0) >> 4) as usize] as u16;
                 let height = self.opcode & 0x000F;
 
+                // reset register VF (but what is that?)
                 self.v[0xF] = 0;
+                // loop over each row?
                 for yline in 0..height
                 {
+                    // fetch the pixel value from the memory starting at location I (ir)
                     let pixel = self.memory[(self.ir + yline) as usize] as u16;
+                    // loop over 8 bits in one row
                     for xline in 0..8
                     {
+                        // check  if the current evaluated pixel is set to 1 (note 0x80 >> xline
+                        // scan through the byte, one bit at a time)
                         if (pixel & (0x80 >> xline)) != 0
                         {
                             let pos = (x + xline + ((y + yline) * 64)) as usize;
@@ -159,14 +199,56 @@ impl VM
                             {
                                 if self.gfx[pos] ==1
                                 {
+                                    // Check if the pixel on the display is set to one. if it is, we need
+                                    // to register the collision by setting the VF register
                                     self.v[0xF] = 1;
                                 }
+                                // set the pixel value by using XOR
                                 self.gfx[pos] ^= 1;
                             }
                         }
                     }
                 }
-            }
+                // Since we've changed our gfx[] array, we'll want to update the screen
+                self.draw_flag = true;
+                // update the program counter to move to the next opcode (2 bytes ahead)
+                self.pc += 2;
+            },
+
+            0xE000 => {
+                match self.opcode & 0x00FF
+                {
+                    0x009E => // EX9E: skips the next instruction if the key stored in VX is pressed
+                    {
+                        if self.key[self.v{((self.opcode & 0x0F00) >> 8) as usize} as usize] != 0
+                        {
+                            self.pc += 4;
+                        }
+                        else
+                        {
+                            self.pc += 2;
+                        }
+                    },
+
+                    0x00A1 => // EXA1: skips the next instructions if the key stored in VX isn't pressed
+                    {
+                        if self.key[self.v[((self.opcode & 0x0F00) >> 8) as usize] usize] == 0
+                        {
+                            self.pc += 4;
+                        }
+                        else
+                        {
+                            self.pc += 2;
+                        }
+                    },
+
+                    _ =>
+                    {
+                        panic!("unknown opcode [0xE000]: 0x{:X}.", self.opcode);
+                    },
+                }
+
+            },
 
             0xF000 =>
             {

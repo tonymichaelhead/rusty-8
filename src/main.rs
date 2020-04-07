@@ -54,20 +54,29 @@ impl VM
             opcode: 0, // Reset current opcode
             ir: 0, // Reset index register
             sp: 0, // Reset stack pointer
-        }
 
-        // Clear display
-        // Clear stack
-        // Clear registers V0-VF
-        // Clear memory
-        //
+            // CPU registers = 15 8-bit general purpose registers name V0, V1, up to VE.
+            // the 16th is for the 'carry flag'
+            v: [0; 16],
+            stack: [0; 16],
+            // Chip 8 has 4K memory
+            memory: [0; 4096]
+
+            gfx: [0; 2048], // 2048 pixels (64 x 32)
+            key: [0; 16],
+
+            delay_timer: 0,
+            sound_timer: 0,
+
+            draw_flag: true,
+            beep_flag: false,
+        };
+
         // Load fontset
         for i in 0..80
         {
             vm.memory[i] = FONTSET[i];
         }
-
-        // Reset timers
 
         return vm;
     }
@@ -82,20 +91,24 @@ impl VM
         // process opcode
         match self.opcode & 0xF000
         {
-            // some opcodes
             0x0000 =>
             {
                 match self.opcode & 0x000F
                 {
                     0x0000 => // 0x00E0: clears the screen
                     {
-                        // execute opcode
-
-
+                        for i in 0..2048
+                        {
+                            self.gfx[i] = 0;
+                        }
+                        self.draw_flag = true;
+                        self.pc += 2;
                     },
                     0x000E => // 0x00EE: returns from subroutine
                     {
-                        // execute opcode
+                        self.sp -= 1;                           // 16 levels of stack, decrease stack pointer to prevent overwrite
+                        self.pc = self.stack[self.sp as usize]; // put the stored return address from the stack back into the program counter
+                        self.pc += 2                            // don't forget to increase the program counter!
                     }
                     _ =>
                     {
@@ -104,29 +117,93 @@ impl VM
                 }
             },
 
-            0x2000 => // 0x2NNN: calls subroutine at NNN.
+            0x1000 => // 0x1NNN: jumps to address NNN
             {
-                self.stack[self.sp as usize] = self.pc; // store current address in stack
-                self.sp +=                              // increment stack pointer
                 self.pc = self.opcode & 0x0FFF;
             },
+
+            0x2000 => // 0x2NNN: calls subroutine at NNN
+            {
+                self.stack[self.sp as usize] = self.pc; // store your current address in the stack
+                self.sp += 1;                           // increment stack pointer
+                self.pc = self.opcode & 0x0FFF;         // set the program counter to the address at NNN
+            },
+
+            0x3000 => // 0x3XNN: skips the next instruction if VX equals NN
+            {
+                if self.v[((self.opcode & 0x0F00) >> 8) as usize] == (self.opcode & 0x0FF) as u8
+                {
+                    self.pc += 4;
+                }
+                else
+                {
+                    self.pc += 2;
+                }
+            },
+
+            0x4000 => // 0x4XNN: skips the next instruction if VX DOESN'T equal NN
+            {
+                if self.v[((self.opcode & 0x0F00) >> 8) as usize] != (self.opcode & 0x00FF) as u8
+                {
+                    self.pc += 4;
+                }
+                else
+                {
+                    self.pc += 2;
+                }
+            },
+
+            0x5000 => // 0x5XY0: skips the next intstruction if VX equals VY
+            {
+                if self.v[((self.opcode & 0x0F00) >> 8) as usize] == self.v[((self.opcode & 0x00F0) >> 4) as usize]
+                {
+                    self.pc += 4;
+                }
+                else
+                {
+                    self.pc += 2;
+                }
+            },
+
+            0x6000 => // 0x6XNN: sets VX to NN
+            {
+                self.v[((self.opcode & 0x0F00) >> 8) as usize] = (self.opcode & 0x00FF) as u8;
+                self.pc += 2;
+            },
+
+            0x7000 => // 0x7XNN: adds NN to VX
+            {
+                let pos: usize = ((self.opcode & 0x0F00) >> 8) as usize;
+                self.v[pos] = self.v[pos].wrapping_add((self.opcode & 0x00FF) as u8);
+                self.pc += 2;
+            },
+
             0x8000 =>
             {
                 match self.opcode & 0x000F
                 {
-                    0x0000 =>
+                    0x0000 => // 0x8XY0: sets VX to the value of VY
                     {
+                        self.v[((self.opcode & 0x0F00) >> 8) as usize] = self.v[((self.opcode & 0x00F0) >> 4) as usize];
+                        self.pc += 2;
                     },
-                    0x0001 =>
+
+                    0x0001 => // 0x8XY1 sets VX to "VX OR VY"
                     {
+                        self.v[((self.opcode & 0x0F00) >> 8) as usize]  |= self.v[((self.opcode & 0x00F0) >> 4) as usize];
+                        self.pc += 2;
                     },
-                    0x0002 =>
+                    0x0002 => // 0x8XY2: sets VX to "VX AND VY"
                     {
+                        self.v[((self.opcode & 0x0F00) >> 8) as usize]  &= self.v[((self.opcode & 0x00F0) >> 4) as usize];
+                        self.pc += 2;
                     },
-                    0x0003 =>
+                    0x0003 => // 0x8XY3: sets VX to "VX XOR VY"
                     {
+                        self.v[((self.opcode & 0x0F00) >> 8) as usize]  ^= self.v[((self.opcode & 0x00F0) >> 4) as usize];
+                        self.pc += 2;
                     },
-                    0x0004 =>
+                    0x0004 => // 0x8XY4: adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't
                     {
                         if self.v[((self.opcode & 0x00f0) >> 4) as usize] > (0xFF - self.v[((self.opcode & 0x0F00) >> 8) as usize])
                         {
@@ -140,8 +217,19 @@ impl VM
                         self.v[pos] = self.v[pos].wrapping_add(self.v[((self.opcode & 0x00F0) >> 4) as usize]);
                         self.pc += 2;
                     },
-                    0x0005 =>
+                    0x0005 => // 0x8XY5: VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't
                     {
+                        let pos: usize = ((self.opcode & 0x0F00) >> 8) as usize;
+                        if self.v[((self.opcode & 0x00F0) >> 4) as usize] > self.v[pos]
+                        {
+                            self.v[0xF] = 0; // there is a borrow
+                        }
+                        else
+                        {
+                            self.v[0xF] = 1;
+                        }
+                        self.v[pos] = self.v[pos].wrapping_sub(self.v[((self.opcode & 0x00F0) >> 4) as usize]);
+                        self.pc += 2;
                     },
                     0x0006 =>
                     {
@@ -155,17 +243,22 @@ impl VM
                 }
             },
 
+            0x9000 =>
+            {
+            },
+
             0xA000 => // ANNN: sets I to the address NNN
             {
                 self.ir = self.opcode & 0x0FFF;
                 self.pc += 2;
             },
 
-            // more opcodes
-
-            _ =>
+            0xB000 =>
             {
-                panic!("unknown opcode [0xF000]: 0x{:X}.", self.opcode);
+            },
+
+            0xC000 =>
+            {
             },
 
             // DXYN: draws a sprite at coordinate (VX,VY) that has a width of 8 pixels and a height of N pixels.

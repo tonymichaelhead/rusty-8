@@ -76,4 +76,76 @@ fn main()
         println!("failed to load rom");
         return
     }
+
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+    let audio_subsystem = sdl_context.audio().unwrap();
+    let window = video_subsystem.window("rusty-8", DISPLAY_WIDTH, DISPLAY_HEIGHT).position_centered().build()
+        .map_err(|e| e.to_string()).unwrap();
+
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string()).unwrap();
+    let texture_creator = canvas.texture_creator();
+
+    let mut texture  = texture_creator.create_texture_streaming(PixelFormatEnum::RGB24, SCREEN_WIDTH,
+        SCREEN_HEIGHT).map_err(|e| e.to_string()).unwrap();
+
+    // TODO: bring er back in
+    // let mut _audio_device = None;
+    let has_sound = Path::new("beep.wav").exists();
+
+    let mut timer = 0;
+
+    'mainloop: loop
+    {
+        for event in sdl_context.event_pump().unwrap().poll_iter()
+        {
+            match event
+            {
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } |
+                Event::Quit { .. } => break 'mainloop,
+
+                // keydown
+
+                _ => {}
+            }
+        }
+
+        if timer == 2000
+        {
+            vm.emulate_cycle();
+            timer = 0;
+        }
+        else
+        {
+            timer += 1;
+        }
+
+        if vm.draw_flag
+        {
+            texture.with_lock(None, |buffer: &mut [u8], pitch: usize|
+            {
+                for y in 0..SCREEN_HEIGHT as usize
+                {
+                    for x in 0..SCREEN_WIDTH as usize
+                    {
+                        let offset: usize = y*pitch + x*3;
+                        let mut color: u8 = 0;
+                        if vm.gfx[((y * SCREEN_WIDTH as usize) + x) as usize] != 0
+                        {
+                            color = 255;
+                        }
+                        buffer[offset] = color;
+                        buffer[offset + 1] = color;
+                        buffer[offset + 2] = color;
+                    }
+                }
+            }).unwrap();
+
+            canvas.clear();
+            canvas.copy(&texture, None, Some(Rect::new(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT))).unwrap();
+            canvas.present();
+
+            vm.draw_flag = false;
+        }
+    }
 }

@@ -231,20 +231,51 @@ impl VM
                         self.v[pos] = self.v[pos].wrapping_sub(self.v[((self.opcode & 0x00F0) >> 4) as usize]);
                         self.pc += 2;
                     },
-                    0x0006 =>
+                    0x0006 => // 0x8XY6: shifts VX right by one  VF is set to the value of the least significant bit of VX befor the shift
                     {
+                        self.v[0xF] = self.v[((self.opcode & 0x0F00) >> 8) as usize] & 0x1;
+                        self.v[((self.opcode) & 0x0F00) as usize] >>= 1;
+                        self.pc +=2;
                     },
-                    0x0007 =>
+                    0x0007 => // 0x8XY7: sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't
                     {
+                        let pos: usize = ((self.opcode & 0x0F00) >> 8) as usize;
+                        if self.v[pos] > self.v[((self.opcode & 0x00F0) >> 4) as usize] // VY-VX
+                        {
+                            self.v[0xF] = 0; // there is a borrow
+                        }
+                        else
+                        {
+                            self.v[0xF] = 1;
+                        }
+                        self.v[pos] = self.v[((self.opcode & 0x00F0) >> 4) as usize].wrapping_sub(self.v[pos]);
+                        self.pc += 2;
                     },
-                    0x000E =>
+
+                    0x000E => // 0x8XYE: shifts VX left by one. VF is set to the value of the most significant bit of VX before the shift
                     {
+                        self.v[0xF] = self.v[((self.opcode & 0x0FF) >> 8) as usize] >> 7;
+                        self.v[((self.opcode & 0x0F00) >> 8) as usize] <<= 1;
+                        self.pc += 2;
+                    },
+
+                    _ =>
+                    {
+                        panic!("unknown opcode [0x8000]: 0x{:X}.", self.opcode);
                     },
                 }
             },
 
-            0x9000 =>
+            0x9000 => // 0x9XY0: skips the next instruction if VX doesn't equal VY
             {
+                if self.v[((self.opcode & 0x0F00) >> 8) as usize] != self.v[((self.opcode & 0x00F0) >> 4) as usize]
+                {
+                    self.pc += 4;
+                }
+                else
+                {
+                    self.pc += 1;
+                }
             },
 
             0xA000 => // ANNN: sets I to the address NNN
@@ -255,10 +286,13 @@ impl VM
 
             0xB000 =>
             {
+                self.pc = (self.opcode & 0x0FFF).wrapping_add(self.v[0] as u16);
             },
 
-            0xC000 =>
+            0xC000 => // CXNN: sets VX to a random number and NN
             {
+                self.v[((self.opcode & 0x0F00) >> 8) as usize] = rand::random::<8>() & (self.opcode as u8);
+                self.pc += 2;
             },
 
             // DXYN: draws a sprite at coordinate (VX,VY) that has a width of 8 pixels and a height of N pixels.
@@ -348,36 +382,97 @@ impl VM
                 match self.opcode & 0x00FF
                 {
 
-                    0x00007 =>
+                    0x0007 => // FX07: sets VX to the value of the delay timer
                     {
+                        self.v[((self.opcode & 0x0F00) >> 8) as usize] = self.delay_timer;
+                        self.pc += 2;
                     },
-                    0x0000A =>
+
+                    0x000A => // FX0A: a key press is awaited, and then stored in VX
                     {
+                        let mut key_press = false;
+
+                        for i in 0..16
+                        {
+                            if self.key[i] != 0
+                            {
+                                self.v[((self.opcode & 0x0F00) >> 8) as usize] = i as u8;
+                                key_press = true;
+                            }
+                        }
+
+                        // if we didn't receive a keypress, skip this cycle and try again.
+                        if key_press
+                        {
+                            self.pc += 2;
+                        }
                     },
-                    0x00015 =>
+
+                    0x0015 =>
                     {
+                        self.delay_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize];
+                        self.pc += 2;
                     },
-                    0x00018 =>
+
+                    0x0018 => // FX18: sets the sound timer to VX
                     {
+                        self.sound_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize];
+                        self.pc += 2;
                     },
-                    0x0001E =>
+
+                    0x001E => // FX1E: adds VX to ir
                     {
+                        let sum = self.ir.wrapping_add(self.v[((self.opcode & 0x0FF) >> 8) as usize] as u16);
+                        if sum > 0xFFF // VF is set to 1 when range overflow (I+VX>0xFFF), and 0 when there isn't
+                        {
+                            self.v[0xF] = 1;
+                        }
+                        else
+                        {
+                            self.v[0xF] = 0;
+                        }
+                        self.ir = sum;
+                        self.pc += 2;
                     },
-                    0x00029 =>
+
+                    0x0029 => // FX29: sets ir to the location of the sprite for the character in VX. Characters 0-F (in hexadecimal) are represented by a 4x5 font
                     {
+                        self.ir = self.v[((self.opcode & 0x0F00) >> 8) as usize] as u16 * 0x5;
+                        self.pc += 2;
                     },
-                    0x00033 => // FX33: stores the binary-coded decimal representation of VX at the addresses ir, ir plus 1, and ir plus 2
+
+                    0x0033 => // FX33: stores the binary-coded decimal representation of VX at the addresses ir, ir plus 1, and ir plus 2
                     {
                         self.memory[self.ir as usize] = self.v[((self.opcode & 0x0F00) >> 8) as usize] / 100;
                         self.memory[(self.ir + 1) as usize] = (self.v[((self.opcode & 0x0F00) >> 8) as usize] / 10) % 10;
                         self.memory[(self.ir + 2) as usize] = (self.v[((self.opcode & 0x0F00) >> 8) as usize] % 100) % 10;
                         self.pc += 2;
                     },
-                    0x00055 =>
+
+                    0x0055 => // FX55: stores V0 to VX in memory starting at address ir
                     {
+                        let j = (self.opcode & 0x0F00) >> 8;
+                        for i in 0..j + 1
+                        {
+                            self.memory[(self.ir + i) as usize] = self.v[i as usize];
+                        }
+
+                        // on the original intepreter, when the operation is done, ir = ir + X + 1.
+                        self.ir = self.ir_wrapping_add(j + 1);
+                        self.pc += 2;
                     },
-                    0x00065 =>
+
+                    0x0065 => // fills V0 to VX with values from memory starting at address ir
                     {
+                        let j = (self.opcode & 0x0F00) >> 8;
+                        for i in 0..j + 1
+                        {
+                            self.v[i as usize] = self.memory[(self.ir + i) as usize];
+                        }
+
+                        // on the original interpreter, when the operation is done, ir = ir + X + 1
+                        self.ir = self.ir.wrapping_add(j + 1);
+                        self.pc += 2;
                     },
 
                     _ =>

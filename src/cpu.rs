@@ -158,7 +158,7 @@ impl VM
 
             0x3000 => // 0x3XNN: skips the next instruction if VX equals NN
             {
-                if self.v[((self.opcode & 0x0F00) >> 8) as usize] == (self.opcode & 0x0FF) as u8
+                if self.v[((self.opcode & 0x0F00) >> 8) as usize] == (self.opcode & 0x00FF) as u8
                 {
                     self.pc += 4;
                 }
@@ -258,11 +258,11 @@ impl VM
                         self.v[pos] = self.v[pos].wrapping_sub(self.v[((self.opcode & 0x00F0) >> 4) as usize]);
                         self.pc += 2;
                     },
-                    0x0006 => // 0x8XY6: shifts VX right by one  VF is set to the value of the least significant bit of VX befor the shift
+                    0x0006 => // 0x8XY6: shifts VX right by one  VF is set to the value of the least significant bit of VX before the shift
                     {
                         self.v[0xF] = self.v[((self.opcode & 0x0F00) >> 8) as usize] & 0x1;
                         self.v[((self.opcode & 0x0F00) >> 8) as usize] >>= 1;
-                        self.pc +=2;
+                        self.pc += 2;
                     },
 
                     0x0007 => // 0x8XY7: sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't
@@ -302,7 +302,7 @@ impl VM
                 }
                 else
                 {
-                    self.pc += 1;
+                    self.pc += 2;
                 }
             },
 
@@ -403,7 +403,6 @@ impl VM
                         panic!("unknown opcode [0xE000]: 0x{:X}.", self.opcode);
                     },
                 }
-
             },
 
             0xF000 =>
@@ -437,7 +436,7 @@ impl VM
                         }
                     },
 
-                    0x0015 =>
+                    0x0015 => // FX15: sets the delay timer to VX
                     {
                         self.delay_timer = self.v[((self.opcode & 0x0F00) >> 8) as usize];
                         self.pc += 2;
@@ -451,7 +450,7 @@ impl VM
 
                     0x001E => // FX1E: adds VX to ir
                     {
-                        let sum = self.ir.wrapping_add(self.v[((self.opcode & 0xF00) >> 8) as usize] as u16);
+                        let sum = self.ir.wrapping_add(self.v[((self.opcode & 0x0F00) >> 8) as usize] as u16);
                         if sum > 0xFFF // VF is set to 1 when range overflow (I+VX>0xFFF), and 0 when there isn't
                         {
                             self.v[0xF] = 1;
@@ -523,7 +522,8 @@ impl VM
             self.delay_timer -= 1;
         }
 
-        if self.sound_timer > 0 {
+        if self.sound_timer > 0
+        {
             if self.sound_timer == 1
             {
                 self.beep_flag = true;

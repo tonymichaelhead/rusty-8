@@ -105,6 +105,47 @@ fn main()
                 Event::Quit { .. } => break 'mainloop,
 
                 // keydown
+                Event::KeyDown { keycode: Some(Keycode::Num1), .. } => { vm.key[1] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::Num2), .. } => { vm.key[2] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::Num3), .. } => { vm.key[3] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::Num4), .. } => { vm.key[0xC] = 1; },
+
+                // Mapped to colemak layout
+                Event::KeyDown { keycode: Some(Keycode::Q), .. } => { vm.key[4] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::W), .. } => { vm.key[5] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::F), .. } => { vm.key[6] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::P), .. } => { vm.key[0xD] = 1; },
+
+                Event::KeyDown { keycode: Some(Keycode::A), .. } => { vm.key[7] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::R), .. } => { vm.key[8] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::S), .. } => { vm.key[9] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::T), .. } => { vm.key[0xE] = 1; },
+
+                Event::KeyDown { keycode: Some(Keycode::Z), .. } => { vm.key[0xA] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::X), .. } => { vm.key[0] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::C), .. } => { vm.key[0xB] = 1; },
+                Event::KeyDown { keycode: Some(Keycode::V), .. } => { vm.key[0xF] = 1; },
+
+                // key up
+                Event::KeyUp { keycode: Some(Keycode::Num1), .. } => { vm.key[1] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::Num2), .. } => { vm.key[2] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::Num3), .. } => { vm.key[3] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::Num4), .. } => { vm.key[0xC] = 0; },
+
+                Event::KeyUp { keycode: Some(Keycode::Q), .. } => { vm.key[4] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::W), .. } => { vm.key[5] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::F), .. } => { vm.key[6] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::P), .. } => { vm.key[0xD] = 0; },
+
+                Event::KeyUp { keycode: Some(Keycode::A), .. } => { vm.key[7] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::R), .. } => { vm.key[8] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::S), .. } => { vm.key[9] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::T), .. } => { vm.key[0xE] = 0; },
+
+                Event::KeyUp { keycode: Some(Keycode::Z), .. } => { vm.key[0xA] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::X), .. } => { vm.key[0] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::C), .. } => { vm.key[0xB] = 0; },
+                Event::KeyUp { keycode: Some(Keycode::V), .. } => { vm.key[0xF] = 0; },
 
                 _ => {}
             }

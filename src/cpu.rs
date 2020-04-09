@@ -113,7 +113,7 @@ impl VM
         // fetch opcode
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
 
-        println!("opcode: {:02X}{:02X}", (self.opcode >> 8) as u8, self.opcode as u8);
+        // println!("opcode: {:02X}{:02X}", (self.opcode >> 8) as u8, self.opcode as u8);
 
         // process opcode
         match self.opcode & 0xF000
@@ -572,7 +572,7 @@ impl VM
             for i in 0..fsize
             {
                 self.memory[(i + 512) as usize] = buffer[i as usize];
-                println!("{}", buffer[i as usize]);
+                // println!("{}", buffer[i as usize]);
             }
         }
         else

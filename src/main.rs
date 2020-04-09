@@ -90,7 +90,7 @@ fn main()
         SCREEN_HEIGHT).map_err(|e| e.to_string()).unwrap();
 
     // TODO: bring er back in
-    // let mut _audio_device = None;
+    let mut _audio_device = None;
     let has_sound = Path::new("beep.wav").exists();
 
     let mut timer = 0;
@@ -187,6 +187,47 @@ fn main()
             canvas.present();
 
             vm.draw_flag = false;
+        }
+
+        if vm.beep_flag
+        {
+            if has_sound
+            {
+                let desired_spec = AudioSpecDesired
+                {
+                    freq: Some(44_100),
+                    channels: Some(1), // mono
+                    samples: None,
+                };
+
+                _audio_device = Some(Box::new(audio_subsystem.open_playback(None, &desired_spec, |spec|
+                {
+                    let wav = AudioSpecWAV::load_wav("beep.wav").expect("could not load test WAV file");
+                    let cvt = AudioCVT::new(wav.format, wav.channels, wav.freq, spec.format,
+                        spec.channels, spec.freq).expect("could not convert WAV file");
+                    let data = cvt.convert(wav.buffer().to_vec());
+
+                    // initialize the audio callback
+                    Sound
+                    {
+                        data: data,
+                        volume: 0.25,
+                        pos: 0,
+                    }
+                }).unwrap()));
+
+                // start playback
+                if let Some(ref dev) = _audio_device
+                {
+                    dev.resume();
+                }
+            }
+            else
+            {
+                println!("BEEP");
+            }
+
+            vm.beep_flag = false;
         }
     }
 }
